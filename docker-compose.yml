@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ingestion_db
+
+  migration:
+    image: mongo:7
+    depends_on:
+      - mongodb
+    volumes:
+      - "./migration.js:/migration.js"
+    command: |
+      bash -c '
+        until mongosh --host mongodb:27017 --eval "db.runCommand({ping: 1})" --quiet; do
+          sleep 2
+        done
+        mongosh --host mongodb:27017 ingestion_db /migration.js
+      '
+
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: s3,sqs
+      DEBUG: 1
+    volumes:
+      - "./localstack:/etc/localstack/init/ready.d"
