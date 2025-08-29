@@ -3,7 +3,7 @@ use tracing::{debug, info, error};
 use crate::{
     domain::{error::IngestionError, ports::DataParser},
     infrastructure::parsers::{
-        csv_parser::parse_csv,
+        csv_parser::{parse_csv, parse_csv_with_config},
         json_parser::parse_json,
         txt_parser::parse_txt,
         xml_parser::parse_xml,
@@ -23,12 +23,16 @@ impl ParserAdapter {
 #[async_trait]
 impl DataParser for ParserAdapter {
     async fn parse(&self, file_bytes: &[u8], file_type: &str) -> Result<Vec<serde_json::Value>, IngestionError> {
+        self.parse_with_config(file_bytes, file_type, None).await
+    }
+    
+    async fn parse_with_config(&self, file_bytes: &[u8], file_type: &str, config: Option<&serde_json::Value>) -> Result<Vec<serde_json::Value>, IngestionError> {
         info!("Parsing file with type: {} ({} bytes)", file_type, file_bytes.len());
         
         let result = match file_type {
             "csv" => {
-                debug!("Parsing CSV file");
-                parse_csv(file_bytes)
+                debug!("Parsing CSV file with config: {:?}", config);
+                parse_csv_with_config(file_bytes, config)
             },
             "json" => {
                 debug!("Parsing JSON file");

@@ -10,6 +10,7 @@ pub trait FileFetcher: Send + Sync {
 #[async_trait]
 pub trait DataParser: Send + Sync {
     async fn parse(&self, file_bytes: &[u8], file_type: &str) -> Result<Vec<serde_json::Value>, IngestionError>;
+    async fn parse_with_config(&self, file_bytes: &[u8], file_type: &str, config: Option<&serde_json::Value>) -> Result<Vec<serde_json::Value>, IngestionError>;
 }
 
 #[async_trait]

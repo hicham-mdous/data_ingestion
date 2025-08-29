@@ -40,6 +40,13 @@ db.ingestion_config.insertMany([
     parser_config: {
       sheet_index: 0
     }
+  },
+  {
+    pattern: ".*test_no_headers\\.csv$",
+    target_table: "csv_no_headers_data",
+    parser_config: {
+      headers: ["name", "age", "email", "city"]
+    }
   }
 ]);
 

@@ -34,7 +34,9 @@ impl ConfigRepository for MongoConfigRepository {
                 IngestionError::Database(e.to_string())
             })?;
 
+        let mut matching_rules = Vec::new();
         let mut rules_checked = 0;
+        
         while cursor.advance().await.map_err(|e| {
             error!("Failed to advance cursor: {}", e);
             IngestionError::Database(e.to_string())
@@ -56,15 +58,27 @@ impl ConfigRepository for MongoConfigRepository {
                 })?;
             
             if regex.is_match(s3_key) {
-                info!("✅ Found matching rule for '{}': pattern='{}', target_table='{}'", 
-                    s3_key, rule.pattern, rule.target_table);
-                return Ok(Some(rule));
+                debug!("✅ Rule pattern '{}' matches key '{}'", rule.pattern, s3_key);
+                matching_rules.push(rule);
             } else {
                 debug!("❌ Rule pattern '{}' does not match key '{}'", rule.pattern, s3_key);
             }
         }
         
-        warn!("No matching configuration rule found for '{}' after checking {} rules", s3_key, rules_checked);
-        Ok(None)
+        if matching_rules.is_empty() {
+            warn!("No matching configuration rule found for '{}' after checking {} rules", s3_key, rules_checked);
+            return Ok(None);
+        }
+        
+        // Select the most specific rule (longest pattern)
+        let best_rule = matching_rules
+            .into_iter()
+            .max_by_key(|rule| rule.pattern.len())
+            .unwrap();
+        
+        info!("✅ Best matching rule for '{}': pattern='{}', target_table='{}'", 
+            s3_key, best_rule.pattern, best_rule.target_table);
+        
+        Ok(Some(best_rule))
     }
 }

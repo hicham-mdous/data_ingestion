@@ -68,8 +68,8 @@ impl IngestionService {
         debug!("Step 3: Detected file type: {}", file_type);
         
         // Step 4: Parse file content
-        debug!("Step 4: Parsing file content with type: {}", file_type);
-        let documents = self.data_parser.parse(&file_bytes, &file_type).await
+        debug!("Step 4: Parsing file content with type: {} and config: {:?}", file_type, config.parser_config);
+        let documents = self.data_parser.parse_with_config(&file_bytes, &file_type, config.parser_config.as_ref()).await
             .map_err(|e| {
                 error!("Failed to parse file {}: {}", file.key, e);
                 e

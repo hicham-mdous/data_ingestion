@@ -27,7 +27,8 @@ test_csv() {
 John,30,NYC
 Jane,25,LA
 Bob,35,Chicago" > data/test.csv
-    aws --endpoint-url=http://localhost:4566 s3 cp data/test.csv s3://test-bucket/data/test.csv
+    #aws --endpoint-url=http://localhost:4566 s3 cp data/test.csv s3://test-bucket/data/test.csv
+    aws --endpoint-url=http://localhost:4566 s3 cp data/test_no_headers.csv s3://test-bucket/data/test_no_headers.csv
     echo "✅ CSV file uploaded! Verify with: docker-compose exec mongodb mongosh ingestion_db --eval \"db.csv_data.find().pretty()\""
 }
 
