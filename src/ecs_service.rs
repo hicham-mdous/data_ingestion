@@ -8,7 +8,7 @@ use crate::{
     infrastructure::{
         s3_adapter::S3Adapter,
         parser_adapter::ParserAdapter,
-        mongodb::{config_repo::MongoConfigRepository, data_repo::MongoDataRepository},
+        mongodb::{config_repo::MongoConfigRepository, data_repo::MongoDataRepository, log_repo::MongoLogRepository},
         dynamodb::{config_repo::DynamoConfigRepository, data_repo::DynamoDataRepository},
     },
 };
@@ -66,10 +66,12 @@ impl EcsService {
                 info!("DynamoDB config table: {}", config_table);
                 
                 let config_repo = Arc::new(DynamoConfigRepository::new(dynamo_client.clone(), config_table));
-                let data_repo = Arc::new(DynamoDataRepository::new(dynamo_client));
+                let data_repo = Arc::new(DynamoDataRepository::new(dynamo_client.clone()));
+                // TODO: Implement DynamoDB log repository
+                let log_repo = Arc::new(MongoLogRepository::new(mongodb::Client::with_uri_str("mongodb://localhost:27017").await?, "ingestion_db".to_string()));
                 debug!("DynamoDB repositories initialized");
                 
-                IngestionService::new(file_fetcher, parser, config_repo, data_repo)
+                IngestionService::new(file_fetcher, parser, config_repo, data_repo, log_repo)
             },
             _ => {
                 debug!("Initializing MongoDB repositories");
@@ -88,10 +90,11 @@ impl EcsService {
                 debug!("MongoDB client connected successfully");
                 
                 let config_repo = Arc::new(MongoConfigRepository::new(&mongo_client, &mongo_db));
-                let data_repo = Arc::new(MongoDataRepository::new(mongo_client, mongo_db));
+                let data_repo = Arc::new(MongoDataRepository::new(mongo_client.clone(), mongo_db.clone()));
+                let log_repo = Arc::new(MongoLogRepository::new(mongo_client, mongo_db));
                 debug!("MongoDB repositories initialized");
                 
-                IngestionService::new(file_fetcher, parser, config_repo, data_repo)
+                IngestionService::new(file_fetcher, parser, config_repo, data_repo, log_repo)
             }
         };
         

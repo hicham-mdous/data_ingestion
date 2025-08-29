@@ -1,9 +1,11 @@
 use std::sync::Arc;
 use tracing::{info, debug, error, warn};
+use chrono::{Utc, DateTime};
+use uuid::Uuid;
 use crate::domain::{
     error::IngestionError,
-    models::{FileToProcess, IngestionConfigRule},
-    ports::{FileFetcher, DataParser, ConfigRepository, DataRepository},
+    models::{FileToProcess, IngestionConfigRule, IngestionLog, IngestionStatus},
+    ports::{FileFetcher, DataParser, ConfigRepository, DataRepository, LogRepository},
 };
 
 pub struct IngestionService {
@@ -11,6 +13,7 @@ pub struct IngestionService {
     data_parser: Arc<dyn DataParser>,
     config_repo: Arc<dyn ConfigRepository>,
     data_repo: Arc<dyn DataRepository>,
+    log_repo: Arc<dyn LogRepository>,
 }
 
 impl IngestionService {
@@ -19,17 +22,27 @@ impl IngestionService {
         data_parser: Arc<dyn DataParser>,
         config_repo: Arc<dyn ConfigRepository>,
         data_repo: Arc<dyn DataRepository>,
+        log_repo: Arc<dyn LogRepository>,
     ) -> Self {
         Self {
             file_fetcher,
             data_parser,
             config_repo,
             data_repo,
+            log_repo,
         }
     }
 
     pub async fn process_file(&self, file: FileToProcess) -> Result<(), IngestionError> {
-        info!("Starting file processing: s3://{}/{}", file.bucket, file.key);
+        let start_time = Utc::now();
+        let file_name = format!("{}/{}", file.bucket, file.key);
+        
+        info!("Starting file processing: s3://{}", file_name);
+        
+        self.process_file_internal(&file, start_time).await
+    }
+    
+    async fn process_file_internal(&self, file: &FileToProcess, start_time: DateTime<Utc>) -> Result<(), IngestionError> {
         debug!("File details - bucket: {}, key: {}", file.bucket, file.key);
 
         // Step 1: Find matching configuration
@@ -63,17 +76,54 @@ impl IngestionService {
             })?;
         info!("Successfully parsed {} documents from file", documents.len());
         
-        // Step 5: Store documents
-        debug!("Step 5: Storing {} documents to table: {}", documents.len(), config.target_table);
-        self.data_repo.insert_documents(&config.target_table, &documents).await
+        // Step 5: Add file_name to each document and store
+        debug!("Step 5: Adding file_name and storing {} documents to table: {}", documents.len(), config.target_table);
+        let file_name = format!("{}/{}", file.bucket, file.key);
+        let mut documents_with_filename: Vec<serde_json::Value> = documents
+            .into_iter()
+            .map(|mut doc| {
+                if let serde_json::Value::Object(ref mut map) = doc {
+                    map.insert("file_name".to_string(), serde_json::Value::String(file_name.clone()));
+                }
+                doc
+            })
+            .collect();
+        
+        // Create initial log entry to get log_id
+        let log = IngestionLog {
+            file_name: format!("{}/{}", file.bucket, file.key),
+            start_time,
+            end_time: None,
+            status: IngestionStatus::Success,
+            message: None,
+        };
+        let log_id = self.log_repo.insert_log(&log).await
             .map_err(|e| {
-                error!("Failed to store documents for {}: {}", file.key, e);
+                error!("Failed to create log entry for {}: {}", file.key, e);
                 e
             })?;
         
-        info!("✅ Successfully processed file {}/{} - {} documents stored in {}", 
-            file.bucket, file.key, documents.len(), config.target_table);
-        Ok(())
+        let processing_result: Result<(), IngestionError> = async {
+            let _inserted_ids = self.data_repo.insert_documents(&config.target_table, &documents_with_filename, &log_id).await
+                .map_err(|e| {
+                    error!("Failed to store documents for {}: {}", file.key, e);
+                    e
+                })?;
+            
+            info!("✅ Successfully processed file {}/{} - {} documents stored in {}", 
+                file.bucket, file.key, documents_with_filename.len(), config.target_table);
+            Ok::<(), IngestionError>(())
+        }.await;
+        
+        // Update log with final status
+        let (status, message) = match &processing_result {
+            Ok(_) => (IngestionStatus::Success, Some("File processed successfully".to_string())),
+            Err(e) => (IngestionStatus::Failed, Some(e.to_string())),
+        };
+        
+        let _ = self.log_repo.update_log(&log_id, Utc::now(), status, message).await;
+        
+        processing_result
     }
 
     async fn find_matching_config(&self, s3_key: &str) -> Result<IngestionConfigRule, IngestionError> {

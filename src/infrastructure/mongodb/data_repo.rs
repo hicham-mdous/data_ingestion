@@ -17,26 +17,30 @@ impl MongoDataRepository {
 
 #[async_trait]
 impl DataRepository for MongoDataRepository {
-    async fn insert_documents(&self, target_table: &str, documents: &[serde_json::Value]) -> Result<(), IngestionError> {
+    async fn insert_documents(&self, target_table: &str, documents: &[serde_json::Value], log_id: &str) -> Result<Vec<String>, IngestionError> {
         debug!("Inserting {} documents into collection: {}", documents.len(), target_table);
         
         if documents.is_empty() {
             info!("No documents to insert into {}", target_table);
-            return Ok(());
+            return Ok(vec![]);
         }
         
         let collection: Collection<Document> = self.client.database(&self.database).collection(target_table);
         debug!("Connected to collection: {}.{}", self.database, target_table);
         
-        debug!("Converting {} JSON documents to BSON", documents.len());
+        debug!("Converting {} JSON documents to BSON and adding log_id: {}", documents.len(), log_id);
         let docs: Vec<Document> = documents
             .iter()
             .enumerate()
             .map(|(i, doc)| {
-                mongodb::bson::to_document(doc)
+                let mut doc_with_log_id = doc.clone();
+                if let serde_json::Value::Object(ref mut map) = doc_with_log_id {
+                    map.insert("log_id".to_string(), serde_json::Value::String(log_id.to_string()));
+                }
+                mongodb::bson::to_document(&doc_with_log_id)
                     .map_err(|e| {
                         error!("Failed to convert document {} to BSON: {}", i, e);
-                        debug!("Problematic document: {}", serde_json::to_string_pretty(doc).unwrap_or_else(|_| "<invalid json>".to_string()));
+                        debug!("Problematic document: {}", serde_json::to_string_pretty(&doc_with_log_id).unwrap_or_else(|_| "<invalid json>".to_string()));
                         e
                     })
             })
@@ -54,10 +58,14 @@ impl DataRepository for MongoDataRepository {
                 IngestionError::Database(e.to_string())
             })?;
 
-        info!("✅ Successfully inserted {} documents into collection: {}", 
-            result.inserted_ids.len(), target_table);
-        debug!("Inserted document IDs: {:?}", result.inserted_ids);
+        let ids: Vec<String> = result.inserted_ids.values()
+            .map(|id| id.to_string())
+            .collect();
         
-        Ok(())
+        info!("✅ Successfully inserted {} documents into collection: {}", 
+            ids.len(), target_table);
+        debug!("Inserted document IDs: {:?}", ids);
+        
+        Ok(ids)
     }
 }

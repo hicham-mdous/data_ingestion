@@ -8,6 +8,7 @@ A Rust application that runs on ECS, ingests files from S3 via SQS events, parse
 - **Databases**: MongoDB, CouchDB, DynamoDB
 - **Architecture**: Hexagonal Architecture for clean separation of concerns
 - **Configuration**: Database-driven configuration rules with regex pattern matching
+- **Ingestion Logging**: Tracks processing start/end times, status, and error messages in `ingestion_logs` collection
 
 ## Setup
 
@@ -43,7 +44,11 @@ cargo watch -c -w src -x run
 
 4. Verify data:
 ```bash
-docker-compose  exec mongodb mongosh ingestion_db --eval "db.csv_data.find().pretty()"
+# Check processed data
+docker-compose exec mongodb mongosh ingestion_db --eval "db.csv_data.find().pretty()"
+
+# Check ingestion logs
+docker-compose exec mongodb mongosh ingestion_db --eval "db.ingestion_logs.find().pretty()"
 ```
 
 5. Test different file types:

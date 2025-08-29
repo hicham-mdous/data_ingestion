@@ -1,3 +1,4 @@
-name,age,department
-Alice,28,HR
-Charlie,32,Finance
+name,age,city
+John,30,NYC
+Jane,25,LA
+Bob,35,Chicago

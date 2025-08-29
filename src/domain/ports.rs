@@ -1,5 +1,6 @@
 use async_trait::async_trait;
-use crate::domain::{error::IngestionError, models::IngestionConfigRule};
+use chrono::{DateTime, Utc};
+use crate::domain::{error::IngestionError, models::{IngestionConfigRule, IngestionLog, IngestionStatus}};
 
 #[async_trait]
 pub trait FileFetcher: Send + Sync {
@@ -18,5 +19,11 @@ pub trait ConfigRepository: Send + Sync {
 
 #[async_trait]
 pub trait DataRepository: Send + Sync {
-    async fn insert_documents(&self, target_table: &str, documents: &[serde_json::Value]) -> Result<(), IngestionError>;
+    async fn insert_documents(&self, target_table: &str, documents: &[serde_json::Value], log_id: &str) -> Result<Vec<String>, IngestionError>;
+}
+
+#[async_trait]
+pub trait LogRepository: Send + Sync {
+    async fn insert_log(&self, log: &IngestionLog) -> Result<String, IngestionError>;
+    async fn update_log(&self, log_id: &str, end_time: DateTime<Utc>, status: IngestionStatus, message: Option<String>) -> Result<(), IngestionError>;
 }

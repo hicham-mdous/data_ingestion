@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{Client, types::AttributeValue};
 use std::collections::HashMap;
+use uuid::Uuid;
 use crate::domain::{error::IngestionError, ports::DataRepository};
 
 pub struct DynamoDataRepository {
@@ -15,7 +16,9 @@ impl DynamoDataRepository {
 
 #[async_trait]
 impl DataRepository for DynamoDataRepository {
-    async fn insert_documents(&self, target_table: &str, documents: &[serde_json::Value]) -> Result<(), IngestionError> {
+    async fn insert_documents(&self, target_table: &str, documents: &[serde_json::Value], log_id: &str) -> Result<Vec<String>, IngestionError> {
+        let mut ids = Vec::new();
+        
         for doc in documents {
             let mut item = HashMap::new();
             
@@ -31,15 +34,21 @@ impl DataRepository for DynamoDataRepository {
                 }
             }
             
-            self.client
+            // Add log_id to the item
+            item.insert("log_id".to_string(), AttributeValue::S(log_id.to_string()));
+            
+            let response = self.client
                 .put_item()
                 .table_name(target_table)
                 .set_item(Some(item))
                 .send()
                 .await
                 .map_err(|e| IngestionError::Database(e.to_string()))?;
+            
+            // DynamoDB doesn't return IDs for put_item, so we generate a placeholder
+            ids.push(format!("dynamo-{}", Uuid::new_v4()));
         }
         
-        Ok(())
+        Ok(ids)
     }
 }

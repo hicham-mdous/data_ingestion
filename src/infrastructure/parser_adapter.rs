@@ -8,7 +8,7 @@ use crate::{
         txt_parser::parse_txt,
         xml_parser::parse_xml,
         excel_parser::parse_excel,
-    },
+    }
 };
 
 pub struct ParserAdapter;
