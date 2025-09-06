@@ -9,7 +9,7 @@ use crate::{
         s3_adapter::S3Adapter,
         parser_adapter::ParserAdapter,
         mongodb::{config_repo::MongoConfigRepository, data_repo::MongoDataRepository, log_repo::MongoLogRepository},
-        dynamodb::{config_repo::DynamoConfigRepository, data_repo::DynamoDataRepository},
+        documentdb::{config_repo::DocumentDBConfigRepository, data_repo::DocumentDBDataRepository},
     },
 };
 
@@ -58,18 +58,26 @@ impl EcsService {
         info!("Using database type: {}", db_type);
         
         let service = match db_type.as_str() {
-            "dynamodb" => {
-                debug!("Initializing DynamoDB repositories");
-                let dynamo_client = aws_sdk_dynamodb::Client::new(&aws_config);
-                let config_table = std::env::var("DYNAMODB_CONFIG_TABLE")
+            "documentdb" => {
+                debug!("Initializing DocumentDB repositories");
+                let documentdb_uri = std::env::var("DOCUMENTDB_URI")
+                    .unwrap_or_else(|_| "mongodb://localhost:27017".to_string());
+                let documentdb_database = std::env::var("DOCUMENTDB_DATABASE")
+                    .unwrap_or_else(|_| "ingestion_db".to_string());
+                let config_collection = std::env::var("DOCUMENTDB_CONFIG_COLLECTION")
                     .unwrap_or_else(|_| "ingestion_config".to_string());
-                info!("DynamoDB config table: {}", config_table);
+                info!("DocumentDB URI: {}, Database: {}, Config Collection: {}", documentdb_uri, documentdb_database, config_collection);
                 
-                let config_repo = Arc::new(DynamoConfigRepository::new(dynamo_client.clone(), config_table));
-                let data_repo = Arc::new(DynamoDataRepository::new(dynamo_client.clone()));
-                // TODO: Implement DynamoDB log repository
-                let log_repo = Arc::new(MongoLogRepository::new(mongodb::Client::with_uri_str("mongodb://localhost:27017").await?, "ingestion_db".to_string()));
-                debug!("DynamoDB repositories initialized");
+                let documentdb_client = mongodb::Client::with_uri_str(&documentdb_uri).await
+                    .map_err(|e| {
+                        error!("Failed to connect to DocumentDB: {}", e);
+                        e
+                    })?;
+                
+                let config_repo = Arc::new(DocumentDBConfigRepository::new(documentdb_client.clone(), documentdb_database.clone(), config_collection));
+                let data_repo = Arc::new(DocumentDBDataRepository::new(documentdb_client.clone(), documentdb_database.clone()));
+                let log_repo = Arc::new(MongoLogRepository::new(documentdb_client, documentdb_database));
+                debug!("DocumentDB repositories initialized");
                 
                 IngestionService::new(file_fetcher, parser, config_repo, data_repo, log_repo)
             },

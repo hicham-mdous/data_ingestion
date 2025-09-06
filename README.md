@@ -5,7 +5,7 @@ A Rust application that runs on ECS, ingests files from S3 via SQS events, parse
 ## Features
 
 - **File Types Supported**: CSV, JSON, TXT, XML, XLS/XLSX
-- **Databases**: MongoDB, CouchDB, DynamoDB
+- **Databases**: MongoDB, CouchDB, DocumentDB
 - **Architecture**: Hexagonal Architecture for clean separation of concerns
 - **Configuration**: Database-driven configuration rules with regex pattern matching
 - **Ingestion Logging**: Tracks processing start/end times, status, and error messages in `ingestion_logs` collection
@@ -95,10 +95,10 @@ docker-compose exec mongodb mongosh ingestion_db --eval "db.ingestion_logs.find(
 ### Production Deployment
 
 **Environment Variables:**
-- `DATABASE_TYPE`: Database type (mongodb, dynamodb)
+- `DATABASE_TYPE`: Database type (mongodb, documentdb)
 - `MONGODB_URI`: MongoDB connection string (if using MongoDB)
 - `MONGODB_DATABASE`: Database name (if using MongoDB)
-- `DYNAMODB_CONFIG_TABLE`: DynamoDB config table name (if using DynamoDB)
+- `DOCUMENTDB_CONFIG_TABLE`: DocumentDB config table name (if using DocumentDB)
 - `SQS_QUEUE_URL`: SQS queue URL for S3 events
 
 **Manual deployment:**

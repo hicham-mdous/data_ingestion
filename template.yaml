@@ -4,14 +4,14 @@ Parameters:
   DatabaseType:
     Type: String
     Default: mongodb
-    AllowedValues: [mongodb, dynamodb]
+    AllowedValues: [mongodb, documentdb]
   MongoDBURI:
     Type: String
     Default: mongodb://localhost:27017
   MongoDBDatabase:
     Type: String
     Default: ingestion_db
-  DynamoDBConfigTable:
+  DocumentDBConfigTable:
     Type: String
     Default: ingestion_config
   ImageUri:
@@ -74,8 +74,8 @@ Resources:
               Value: !Ref MongoDBURI
             - Name: MONGODB_DATABASE
               Value: !Ref MongoDBDatabase
-            - Name: DYNAMODB_CONFIG_TABLE
-              Value: !Ref DynamoDBConfigTable
+            - Name: DOCUMENTDB_CONFIG_TABLE
+              Value: !Ref DocumentDBConfigTable
             - Name: SQS_QUEUE_URL
               Value: !Ref SQSQueue
           LogConfiguration:
@@ -217,7 +217,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
         - arn:aws:iam::aws:policy/AmazonSQSFullAccess
-        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/AmazonDocDBFullAccess
 
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
