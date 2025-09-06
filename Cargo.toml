@@ -8,7 +8,7 @@ name = "data_ingestion"
 path = "src/lib.rs"
 
 [dependencies]
-aws-sdk-s3 = "1.8"
+aws-sdk-s3 = "1.104"
 aws-sdk-dynamodb = "1.8"
 aws-config = "1.8"
 csv = "1.1"
