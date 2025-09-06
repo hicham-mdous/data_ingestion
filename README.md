@@ -54,7 +54,7 @@ docker-compose up -d
 export DATABASE_TYPE=mongodb
 export MONGODB_URI=mongodb://localhost:27017
 export MONGODB_DATABASE=ingestion_db
-export SQS_QUEUE_URL=http://localhost:4566/000000000000/sam-app-ingestion-queue
+export SQS_QUEUE_URL=http://localhost:4566/000000000000/test-queue
 export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
 export AWS_DEFAULT_REGION=us-east-1

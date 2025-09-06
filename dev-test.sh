@@ -30,6 +30,18 @@ export AWS_SECRET_ACCESS_KEY=test
 export AWS_DEFAULT_REGION=us-east-1
 export AWS_ENDPOINT_URL=http://localhost:4566
 
+# Bucket configuration
+BUCKET_NAME=${BUCKET_NAME:-"data-ingestion-bucket"}
+
+# Check if bucket exists, create if not
+echo "🪣 Checking S3 bucket: $BUCKET_NAME"
+if ! aws --endpoint-url=http://localhost:4566 s3 ls s3://$BUCKET_NAME >/dev/null 2>&1; then
+    echo "📦 Creating S3 bucket: $BUCKET_NAME"
+    aws --endpoint-url=http://localhost:4566 s3 mb s3://$BUCKET_NAME
+else
+    echo "✅ S3 bucket exists: $BUCKET_NAME"
+fi
+
 test_csv() {
     mkdir -p data
     
@@ -38,7 +50,7 @@ test_csv() {
         echo "John,30,NYC
 Jane,25,LA
 Bob,35,Chicago" > data/test_no_headers.csv
-        aws --endpoint-url=http://localhost:4566 s3 cp data/test_no_headers.csv s3://data-ingestion-bucket/data/test_no_headers.csv
+        aws --endpoint-url=http://localhost:4566 s3 cp data/test_no_headers.csv s3://$BUCKET_NAME/data/test_no_headers.csv
         echo "✅ CSV file (no headers) uploaded! Verify with: docker-compose exec mongodb mongosh ingestion_db --eval \"db.csv_data.find().pretty()\""
     else
         echo "📄 Creating CSV test file (with headers)..."
@@ -46,7 +58,7 @@ Bob,35,Chicago" > data/test_no_headers.csv
 John,30,NYC
 Jane,25,LA
 Bob,35,Chicago" > data/test.csv
-        aws --endpoint-url=http://localhost:4566 s3 cp data/test.csv s3://data-ingestion-bucket/data/test.csv
+        aws --endpoint-url=http://localhost:4566 s3 cp data/test.csv s3://$BUCKET_NAME/data/test.csv
         echo "✅ CSV file (with headers) uploaded! Verify with: docker-compose exec mongodb mongosh ingestion_db --eval \"db.csv_data.find().pretty()\""
     fi
 }
@@ -55,7 +67,7 @@ test_json() {
     echo "📄 Creating JSON test file..."
     mkdir -p data
     echo '[{"name":"Alice","value":100},{"name":"Bob","value":200}]' > data/test.json
-    aws --endpoint-url=http://localhost:4566 s3 cp data/test.json s3://data-ingestion-bucket/data/test.json
+    aws --endpoint-url=http://localhost:4566 s3 cp data/test.json s3://$BUCKET_NAME/data/test.json
     echo "✅ JSON file uploaded! Verify with: docker-compose exec mongodb mongosh ingestion_db --eval \"db.json_data.find().pretty()\""
 }
 
@@ -65,7 +77,7 @@ test_txt() {
     echo "Log entry 1: Application started
 Log entry 2: Processing data
 Log entry 3: Task completed" > data/test.txt
-    aws --endpoint-url=http://localhost:4566 s3 cp data/test.txt s3://data-ingestion-bucket/logs/test.txt
+    aws --endpoint-url=http://localhost:4566 s3 cp data/test.txt s3://$BUCKET_NAME/logs/test.txt
     echo "✅ TXT file uploaded! Verify with: docker-compose exec mongodb mongosh ingestion_db --eval \"db.text_logs.find().pretty()\""
 }
 
@@ -85,7 +97,7 @@ test_xml() {
     <email>jane.smith@example.com</email>
   </record>
 </data>' > data/test.xml
-    aws --endpoint-url=http://localhost:4566 s3 cp data/test.xml s3://data-ingestion-bucket/data/test.xml
+    aws --endpoint-url=http://localhost:4566 s3 cp data/test.xml s3://$BUCKET_NAME/data/test.xml
     echo "✅ XML file uploaded! Verify with: docker-compose exec mongodb mongosh ingestion_db --eval \"db.xml_data.find().pretty()\""
 }
 
@@ -97,7 +109,7 @@ Alice,28,HR
 Charlie,32,Finance" > data/test.csv
     # Convert to xlsx using a simple approach (rename for testing)
     cp data/test.csv data/test.xlsx
-    aws --endpoint-url=http://localhost:4566 s3 cp data/test.xlsx s3://data-ingestion-bucket/data/test.xlsx
+    aws --endpoint-url=http://localhost:4566 s3 cp data/test.xlsx s3://$BUCKET_NAME/data/test.xlsx
     echo "✅ XLS file uploaded! Verify with: docker-compose exec mongodb mongosh ingestion_db --eval \"db.xls_data.find().pretty()\""
 }
 
@@ -157,7 +169,7 @@ trailer
 startxref
 238
 %%EOF" > data/test.pdf
-    aws --endpoint-url=http://localhost:4566 s3 cp data/test.pdf s3://data-ingestion-bucket/documents/test.pdf
+    aws --endpoint-url=http://localhost:4566 s3 cp data/test.pdf s3://$BUCKET_NAME/documents/test.pdf
     echo "✅ PDF file uploaded! Verify with: docker-compose exec mongodb mongosh ingestion_db --eval \"db.pdf_documents.find().pretty()\""
 }
 

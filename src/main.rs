@@ -8,6 +8,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info"))
         .add_directive("aws_sdk=warn".parse().unwrap())
+        .add_directive("aws_smithy_client=warn".parse().unwrap())
+        .add_directive("aws_smithy_http_tower=warn".parse().unwrap())
+        .add_directive("hyper=warn".parse().unwrap())
+        .add_directive("tower=warn".parse().unwrap())
         .add_directive("mongodb=info".parse().unwrap());
     
     tracing_subscriber::fmt()
