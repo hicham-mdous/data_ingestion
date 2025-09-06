@@ -17,6 +17,9 @@ Parameters:
   ImageUri:
     Type: String
     Description: ECR image URI
+  BucketName:
+    Type: String
+    Default: data-ingestion-bucket
 
 Resources:
   VPC:
@@ -40,7 +43,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-ingestion-bucket"
+      BucketName: !Ref BucketName
       NotificationConfiguration:
         QueueConfigurations:
           - Event: s3:ObjectCreated:*
@@ -88,11 +91,107 @@ Resources:
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref TaskDefinition
       LaunchType: FARGATE
-      DesiredCount: 1
+      DesiredCount: 0
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets: [!Ref PrivateSubnet]
           SecurityGroups: [!Ref SecurityGroup]
+
+  AutoScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 10
+      MinCapacity: 0
+      ResourceId: !Sub "service/${ECSCluster}/${ECSService.Name}"
+      RoleARN: !GetAtt AutoScalingRole.Arn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  ScaleUpPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: SQSScaleUpPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref AutoScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 300
+        MetricAggregationType: Average
+        StepAdjustments:
+          - MetricIntervalLowerBound: 0
+            ScalingAdjustment: 1
+
+  ScaleDownPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: SQSScaleDownPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref AutoScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ExactCapacity
+        Cooldown: 300
+        MetricAggregationType: Average
+        StepAdjustments:
+          - MetricIntervalUpperBound: 0
+            ScalingAdjustment: 0
+
+  ScaleUpAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-SQS-Messages-ScaleUp"
+      AlarmDescription: Scale up when messages are visible in queue
+      MetricName: ApproximateNumberOfVisibleMessages
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt SQSQueue.QueueName
+      AlarmActions:
+        - !Ref ScaleUpPolicy
+
+  ScaleDownAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-SQS-Empty-ScaleDown"
+      AlarmDescription: Scale down to 0 when queue is empty for 5 minutes
+      MetricName: ApproximateNumberOfVisibleMessages
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt SQSQueue.QueueName
+      AlarmActions:
+        - !Ref ScaleDownPolicy
+
+  AutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: application-autoscaling.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ApplicationAutoScalingECSServicePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:UpdateService
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:DeleteAlarms
+                Resource: "*"
 
   ExecutionRole:
     Type: AWS::IAM::Role
@@ -115,27 +214,10 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3Access
-          PolicyDocument:
-            Statement:
-              - Effect: Allow
-                Action: s3:GetObject
-                Resource: !Sub "${S3Bucket}/*"
-        - PolicyName: SQSAccess
-          PolicyDocument:
-            Statement:
-              - Effect: Allow
-                Action:
-                  - sqs:ReceiveMessage
-                  - sqs:DeleteMessage
-                Resource: !GetAtt SQSQueue.Arn
-        - PolicyName: DynamoDBAccess
-          PolicyDocument:
-            Statement:
-              - Effect: Allow
-                Action: dynamodb:*
-                Resource: "*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
 
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup

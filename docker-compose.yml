@@ -26,8 +26,11 @@ services:
     image: localstack/localstack:latest
     ports:
       - "4566:4566"
+      - "9000:9000"
     environment:
-      SERVICES: s3,sqs
+      SERVICES: s3,sqs,cloudformation,ecs,dynamodb,cloudwatch,ec2,iam,logs,application-autoscaling
       DEBUG: 1
+      START_WEB: 1
+      PORT_WEB_UI: 9000
     volumes:
       - "./localstack:/etc/localstack/init/ready.d"

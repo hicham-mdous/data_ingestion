@@ -1,0 +1,185 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: data-ingestion
+  ECS_SERVICE: data-ingestion
+  ECS_CLUSTER: data-ingestion-cluster
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: s3,sqs,dynamodb
+          DEBUG: 1
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: rustfmt, clippy
+        override: true
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Format check
+      run: cargo fmt -- --check
+
+    - name: Clippy check
+      run: cargo clippy -- -D warnings
+
+    - name: Run tests
+      env:
+        DATABASE_TYPE: mongodb
+        MONGODB_URI: mongodb://localhost:27017
+        MONGODB_DATABASE: test_db
+        AWS_ACCESS_KEY_ID: test
+        AWS_SECRET_ACCESS_KEY: test
+        AWS_DEFAULT_REGION: us-east-1
+        AWS_ENDPOINT_URL: http://localhost:4566
+        SQS_QUEUE_URL: http://localhost:4566/000000000000/test-queue
+      run: cargo test
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+
+    - name: Security audit
+      uses: actions-rs/audit@v1
+
+  build:
+    needs: [test, security]
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build-image.outputs.image }}
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        role-session-name: GitHubActions-Build
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build and push Docker image
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  deploy-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        role-session-name: GitHubActions-Staging
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Deploy to staging
+      run: |
+        aws cloudformation deploy \
+          --template-file template.yaml \
+          --stack-name data-ingestion-staging \
+          --parameter-overrides \
+            ImageUri=${{ needs.build.outputs.image }} \
+            DatabaseType=mongodb \
+            MongoDBURI=${{ secrets.STAGING_MONGODB_URI }} \
+            MongoDBDatabase=staging_db \
+          --capabilities CAPABILITY_IAM
+
+  deploy-production:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        role-session-name: GitHubActions-Production
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Deploy to production
+      run: |
+        aws cloudformation deploy \
+          --template-file template.yaml \
+          --stack-name data-ingestion-production \
+          --parameter-overrides \
+            ImageUri=${{ needs.build.outputs.image }} \
+            DatabaseType=mongodb \
+            MongoDBURI=${{ secrets.PRODUCTION_MONGODB_URI }} \
+            MongoDBDatabase=production_db \
+          --capabilities CAPABILITY_IAM
+
+    - name: Run smoke tests
+      run: |
+        # Wait for deployment to be ready
+        sleep 60
+        # Add smoke test commands here
+        echo "Smoke tests passed"

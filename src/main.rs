@@ -4,16 +4,15 @@ use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Initialize tracing with debug level
+    // Initialize tracing with configurable log level
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"))
+        .add_directive("aws_sdk=warn".parse().unwrap())
+        .add_directive("mongodb=info".parse().unwrap());
+    
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env()
-            .add_directive("data_ingestion=debug".parse().unwrap())
-            .add_directive("aws_sdk=warn".parse().unwrap())
-            .add_directive("mongodb=info".parse().unwrap()))
+        .with_env_filter(env_filter)
         .with_target(false)
-        .with_thread_ids(true)
-        .with_file(true)
-        .with_line_number(true)
         .init();
     
     info!("Starting data ingestion application");

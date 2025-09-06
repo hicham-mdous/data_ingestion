@@ -1,3 +1,52 @@
-/target
-/data
+instructions.md
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
 
+# Test data
+/data/
+*.csv
+*.json
+*.txt
+*.xml
+*.xlsx
+*.xls
+*.pdf
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# AWS
+.aws/
+
+# Docker
+.dockerignore
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
