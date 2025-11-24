@@ -33,7 +33,7 @@ jobs:
           DEBUG: 1
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
@@ -81,7 +81,7 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
@@ -98,7 +98,7 @@ jobs:
       image: ${{ steps.build-image.outputs.image }}
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -128,7 +128,7 @@ jobs:
     environment: staging
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -156,7 +156,7 @@ jobs:
     environment: production
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
